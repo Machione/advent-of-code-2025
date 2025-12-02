@@ -1,4 +1,4 @@
-from puzzle2 import Dial
+from .puzzle2 import Dial
 
 def test_puzzle2():
     d = Dial()
