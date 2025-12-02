@@ -18,12 +18,19 @@ def get_all_values_in_range(r: str) -> tuple[str, ...]:
 
 
 def is_value_valid(v: str) -> bool:
-    if len(v) == 0 or len(v) % 2 != 0:
+    if len(v) == 0:
         return True
 
-    first_half = v[: len(v) // 2]
-    second_half = v[len(v) // 2 :]
-    return first_half != second_half
+    for dup_length in range(1, (len(v) // 2) + 1):
+        if len(v) % dup_length != 0:
+            continue
+
+        chars_to_check = v[:dup_length]
+        repeats = len(v) // dup_length
+        if v == chars_to_check * repeats:
+            return False
+
+    return True
 
 
 def find_invalid_values_in_range(r: str) -> list[int]:

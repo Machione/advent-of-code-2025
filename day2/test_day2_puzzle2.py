@@ -1,14 +1,15 @@
 import pytest
 
-from .puzzle1 import find_invalid_values_in_range, is_value_valid, sum_invalid_values
+from .puzzle2 import find_invalid_values_in_range, is_value_valid, sum_invalid_values
 
 
 @pytest.mark.parametrize(
     "v,expected",
     [
-        ("55", False),
-        ("6464", False),
-        ("123123", False),
+        ("12341234", False),
+        ("123123123", False),
+        ("1212121212", False),
+        ("1111111", False),
         ("", True),
         ("1", True),
         ("1234", True),
@@ -23,16 +24,16 @@ def test_is_value_valid(v: str, expected: bool) -> None:
     "r,expected",
     [
         ("11-22", [11, 22]),
-        ("95-115", [99]),
-        ("998-1012", [1010]),
+        ("95-115", [99, 111]),
+        ("998-1012", [999, 1010]),
         ("1188511880-1188511890", [1188511885]),
         ("222220-222224", [222222]),
         ("1698522-1698528", []),
         ("446443-446449", [446446]),
         ("38593856-38593862", [38593859]),
-        ("565653-565659", []),
-        ("824824821-824824827", []),
-        ("2121212118-2121212124", []),
+        ("565653-565659", [565656]),
+        ("824824821-824824827", [824824824]),
+        ("2121212118-2121212124", [2121212121]),
     ],
 )
 def test_find_invalid_values_in_range(r: str, expected: list[int]) -> None:
@@ -60,7 +61,7 @@ def test_find_invalid_values_in_range(r: str, expected: list[int]) -> None:
                 "824824821-824824827",
                 "2121212118-2121212124",
             ],
-            1227775554,
+            4174379265,
         )
     ],
 )

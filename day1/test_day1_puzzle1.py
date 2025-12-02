@@ -1,5 +1,6 @@
 from .puzzle1 import Dial
 
+
 def test_puzzle1():
     d = Dial()
     assert d.position == 50
