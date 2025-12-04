@@ -1,38 +1,34 @@
-# from functools import cache
+from functools import cache
 
 
 class Bank:
     def __init__(self, batteries: str) -> None:
-        self.batteries = [int(battery) for battery in batteries]
+        self.batteries = tuple(int(battery) for battery in batteries)
         self.number_of_digits = 12
-        self.returned_n = []
 
-    # @cache
-    def batteries_to_consider(self, n: int) -> list[int]:
+    def nth_digit(self, n: int) -> int:
         if n > self.number_of_digits:
             raise IndexError()
 
         index_limit = n - self.number_of_digits
+        batteries_remaining = self.batteries_left_after(n - 1)
 
-        if n == 1:
-            return self.batteries[:index_limit]
+        if index_limit == 0:
+            index_limit = len(batteries_remaining)
 
-        previously_considered = self.batteries_to_consider(n - 1)
+        batteries_to_consider = batteries_remaining[:index_limit]
+        return max(batteries_to_consider)
 
-        previously_selected = self.nth_digit(n - 1)
-        previously_selected_index = previously_considered.index(previously_selected)
-        now_available = previously_considered[previously_selected_index + 1 :]
+    @cache
+    def batteries_left_after(self, n: int) -> tuple[int, ...]:
+        if n == 0:
+            return self.batteries
 
-        newly_available_battery = self.batteries[index_limit]
-        now_available.append(newly_available_battery)
-        return now_available
-
-    def nth_digit(self, n: int) -> int:
-        if n not in self.returned_n:
-            print(f"n={n}: Max of {self.batteries_to_consider(n)}")
-            self.returned_n.append(n)
-
-        return max(self.batteries_to_consider(n))
+        n_digit = self.nth_digit(n)
+        batteries_considered = self.batteries_left_after(n - 1)
+        n_digit_index = batteries_considered.index(n_digit)
+        batteries_remaining_after = batteries_considered[n_digit_index + 1 :]
+        return batteries_remaining_after
 
     @property
     def maximum_joltage(self) -> int:
