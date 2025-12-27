@@ -3,6 +3,7 @@ from __future__ import annotations
 import itertools
 from collections import Counter
 from collections.abc import Iterator, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from typing import Optional
 
 # x-axis: Left to right = less to more
@@ -123,8 +124,9 @@ class Polygon:
         crossing_points = tuple(
             line.extended_point_crosses_at(point) for line in self.lines
         )
+        actual_crossing_points = tuple(p for p in crossing_points if p is not None)
         non_overlapping_crossings = tuple(
-            p for p, n in Counter(crossing_points).items() if n == 1 and p is not None
+            p for p, n in Counter(actual_crossing_points).items() if n == 1
         )
         return bool(len(non_overlapping_crossings) % 2)
 
@@ -138,46 +140,51 @@ def data_to_points(data: str) -> list[tuple[int, int]]:
     return points
 
 
-def all_rectangles_biggest_to_smallest(
+def all_rectangles(
     points: list[tuple[int, int]],
-) -> list[Rectangle]:
-    rects = [
+) -> tuple[Rectangle, ...]:
+    rects = tuple(
         Rectangle(p1, p2)
         for p1, p2 in itertools.permutations(points, 2)
         if p1[0] <= p2[0] and p1[1] <= p2[1] and (p1[0] < p2[0] or p1[1] < p2[1])
-    ]
-    rects.sort(key=lambda x: x.area, reverse=True)
+    )
     return rects
+
+
+def rectangle_ok(poly: Polygon, rectangle: Rectangle) -> Optional[Rectangle]:
+    for p in rectangle.iter_corners():
+        if poly.is_inside(p) is False:
+            return None
+
+    for p in rectangle.iter_edges():
+        if poly.is_inside(p) is False:
+            return None
+
+    for p in rectangle.iter_points():
+        if poly.is_inside(p) is False:
+            return None
+
+    return rectangle
+
+
+def single_pool_rectangle_ok(args) -> Optional[Rectangle]:
+    poly, rectangle = args
+    return rectangle_ok(poly, rectangle)
 
 
 def solve(data: str) -> int:
     points = data_to_points(data)
     poly = Polygon(points)
-    rectangles = all_rectangles_biggest_to_smallest(points)
-    for rect in rectangles:
-        rect_ok = True
-        if rect_ok:
-            for p in rect.iter_corners():
-                if poly.is_inside(p) is False:
-                    rect_ok = False
-                    break
+    rectangles = all_rectangles(points)
+    args = [(poly, rectangle) for rectangle in rectangles]
+    ok_rectangles = []
+    with ProcessPoolExecutor() as ppe:
+        for res in ppe.map(single_pool_rectangle_ok, args):
+            if res is not None:
+                ok_rectangles.append(res)
 
-        if rect_ok:
-            for p in rect.iter_edges():
-                if poly.is_inside(p) is False:
-                    rect_ok = False
-                    break
-
-        if rect_ok:
-            for p in rect.iter_points():
-                if poly.is_inside(p) is False:
-                    rect_ok = False
-                    break
-
-        if rect_ok:
-            return rect.area
-
-    return 0
+    ok_rectangles.sort(key=lambda x: x.area, reverse=True)
+    return ok_rectangles[0].area
 
 
 if __name__ == "__main__":
