@@ -6,6 +6,8 @@ from collections.abc import Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from typing import Optional
 
+from tqdm import tqdm
+
 # x-axis: Left to right = less to more
 # y-axis: Top to bottom = less to more
 
@@ -178,10 +180,12 @@ def solve(data: str) -> int:
     rectangles = all_rectangles(points)
     args = [(poly, rectangle) for rectangle in rectangles]
     ok_rectangles = []
-    with ProcessPoolExecutor() as ppe:
-        for res in ppe.map(single_pool_rectangle_ok, args):
-            if res is not None:
-                ok_rectangles.append(res)
+    with tqdm(total=len(rectangles)) as progress:
+        with ProcessPoolExecutor() as ppe:
+            for res in ppe.map(single_pool_rectangle_ok, args):
+                progress.update()
+                if res is not None:
+                    ok_rectangles.append(res)
 
     ok_rectangles.sort(key=lambda x: x.area, reverse=True)
     return ok_rectangles[0].area
