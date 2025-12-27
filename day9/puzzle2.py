@@ -3,7 +3,6 @@ from __future__ import annotations
 import itertools
 from collections import Counter
 from collections.abc import Iterator, Sequence
-from functools import cache
 from typing import Optional
 
 # x-axis: Left to right = less to more
@@ -117,7 +116,6 @@ class Polygon:
         )
         self.boundary = set(point for line in self.lines for point in line)
 
-    @cache
     def is_inside(self, point: tuple[int, int]) -> bool:
         if point in self.boundary:
             return True
