@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import multiprocessing
 from collections import Counter
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
@@ -153,7 +154,14 @@ def all_rectangles(
     return rects
 
 
-def rectangle_ok(poly: Polygon, rectangle: Rectangle) -> Optional[Rectangle]:
+def rectangle_ok(
+    poly: Polygon,
+    rectangle: Rectangle,
+    current_max: multiprocessing.sharedctypes.Synchronized,
+) -> Optional[Rectangle]:
+    if rectangle.area <= current_max.value:
+        return None
+
     for p in rectangle.iter_corners():
         if poly.is_inside(p) is False:
             return None
@@ -166,32 +174,42 @@ def rectangle_ok(poly: Polygon, rectangle: Rectangle) -> Optional[Rectangle]:
         if poly.is_inside(p) is False:
             return None
 
+    current_max.value = rectangle.area
+
     return rectangle
 
 
 def single_pool_rectangle_ok(args) -> Optional[Rectangle]:
-    poly, rectangle = args
-    return rectangle_ok(poly, rectangle)
+    poly, rectangle, cur = args
+    return rectangle_ok(poly, rectangle, cur)
 
 
 def solve(data: str) -> int:
     points = data_to_points(data)
     poly = Polygon(points)
     rectangles = all_rectangles(points)
-    args = [(poly, rectangle) for rectangle in rectangles]
-    ok_rectangles = []
     with tqdm(total=len(rectangles)) as progress:
-        with ProcessPoolExecutor() as ppe:
-            for res in ppe.map(single_pool_rectangle_ok, args):
-                progress.update()
-                if res is not None:
-                    ok_rectangles.append(res)
+        with multiprocessing.Manager() as manager:
+            current_max_size = manager.Value("b", 0)
+            last_max_size = 0
+            ok_rectangles: list[Rectangle] = []
+            args = [(poly, rectangle, current_max_size) for rectangle in rectangles]
+            with ProcessPoolExecutor() as executor:
+                for res in executor.map(single_pool_rectangle_ok, args):
+                    progress.update()
+                    if res is not None:
+                        ok_rectangles.append(res)
+
+                    if current_max_size.value > last_max_size:
+                        print(current_max_size.value)
+                        last_max_size = current_max_size.value
 
     ok_rectangles.sort(key=lambda x: x.area, reverse=True)
     return ok_rectangles[0].area
 
 
 if __name__ == "__main__":
+    multiprocessing.set_start_method("forkserver")
     with open("day9/input.txt") as f:
         points_data = f.read()
 
