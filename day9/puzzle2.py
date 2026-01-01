@@ -1,7 +1,6 @@
 import itertools
 from collections import Counter
 from collections.abc import Sequence
-from functools import cache
 
 # x-axis: Left to right = less to more
 # y-axis: Top to bottom = less to more
@@ -15,48 +14,52 @@ def polygon_lines(
     return lines
 
 
-@cache
-def point_inside_polygon(
-    lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...], point: tuple[int, int]
-) -> bool:
-    crossings_to_right: list[tuple[int, int]] = []
+def split_and_clean_polygon_lines(
+    lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...],
+) -> tuple[
+    tuple[tuple[tuple[int, int], tuple[int, int]], ...],
+    tuple[tuple[tuple[int, int], tuple[int, int]], ...],
+]:
+    horizontal_lines: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    vertical_lines: list[tuple[tuple[int, int], tuple[int, int]]] = []
     for line in lines:
-        horizontal = line[0][1] == line[1][1]
-        vertical = line[0][0] == line[1][0]
+        if line[0][1] == line[1][1]:
+            start = (min(line[0][0], line[1][0]), line[0][1])
+            end = (max(line[0][0], line[1][0]), line[0][1])
+            horizontal_lines.append((start, end))
+        elif line[0][0] == line[1][0]:
+            start = (line[0][0], min(line[0][1], line[1][1]))
+            end = (line[0][0], max(line[0][1], line[1][1]))
+            vertical_lines.append((start, end))
 
-        if horizontal:
-            line_start = (min(line[0][0], line[1][0]), line[0][1])
-            line_end = (max(line[0][0], line[1][0]), line[0][1])
+    return tuple(horizontal_lines), tuple(vertical_lines)
 
-        if vertical:
-            line_start = (line[0][0], min(line[0][1], line[1][1]))
-            line_end = (line[0][0], max(line[0][1], line[1][1]))
 
-        if (
-            horizontal
-            and point[1] == line_start[1]
-            and point[0] >= line_start[0]
-            and point[0] <= line_end[0]
-        ):
+def point_inside_polygon(
+    horizontal_lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...],
+    vertical_lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...],
+    point: tuple[int, int],
+) -> bool:
+    x, y = point
+
+    colinear_horizontals = (line for line in horizontal_lines if line[0][1] == y)
+    for h_line in colinear_horizontals:
+        if x >= h_line[0][0] and x <= h_line[1][0]:
             # The point lies on the line
             return True
 
-        if vertical:
-            if (
-                point[0] == line_start[0]
-                and point[1] >= line_start[1]
-                and point[1] <= line_end[1]
-            ):
-                # The point lies on the line
-                return True
+    colinear_verticals = (line for line in vertical_lines if line[0][0] == x)
+    for v_line in colinear_verticals:
+        if y >= v_line[0][1] and y <= v_line[1][1]:
+            # The point lies on the line
+            return True
 
-            if (
-                point[0] < line_start[0]
-                and point[1] >= line_start[1]
-                and point[1] < line_end[1]
-            ):
-                crossing_point = (line_start[0], point[1])
-                crossings_to_right.append(crossing_point)
+    crossings_to_right: list[tuple[int, int]] = []
+    verticals_to_right = (line for line in vertical_lines if line[0][0] > x)
+    for line in verticals_to_right:
+        if y >= line[0][1] and y < line[1][1]:
+            crossing_point = (line[0][0], y)
+            crossings_to_right.append(crossing_point)
 
     non_overlapping_crossings = tuple(
         p for p, n in Counter(crossings_to_right).items() if n == 1
@@ -96,23 +99,24 @@ def all_rectangles(
 
 
 def rectangle_ok(
-    polygon_lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...],
+    horizontal_lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...],
+    vertical_lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...],
     rectangle: tuple[tuple[int, int], tuple[int, int]],
 ) -> bool:
     top_left, bottom_right = rectangle
     bottom_left = (top_left[0], bottom_right[1])
-    if point_inside_polygon(polygon_lines, bottom_left) is False:
+    if point_inside_polygon(horizontal_lines, vertical_lines, bottom_left) is False:
         return False
 
     top_right = (bottom_right[0], top_left[1])
-    if point_inside_polygon(polygon_lines, top_right) is False:
+    if point_inside_polygon(horizontal_lines, vertical_lines, top_right) is False:
         return False
 
     all_points = itertools.product(
         range(top_left[0], top_right[0] + 1), range(top_left[1], bottom_left[1] + 1)
     )
     for point in all_points:
-        if point_inside_polygon(polygon_lines, point) is False:
+        if point_inside_polygon(horizontal_lines, vertical_lines, point) is False:
             return False
 
     return True
@@ -123,11 +127,13 @@ def solve(data: str) -> int:
     print("Read in the data")
     poly = polygon_lines(points)
     print("Converted points to lines on a polygon")
+    h_lines, v_lines = split_and_clean_polygon_lines(poly)
+    print("Cleaned and categorised lines of polygon")
     rectangles = all_rectangles(points)
     print("Found and sorted all the possible rectangles")
     num_rectangles = len(rectangles)
     for i, rectangle in enumerate(rectangles):
-        if rectangle_ok(poly, rectangle):
+        if rectangle_ok(h_lines, v_lines, rectangle):
             best_area = rectangle_area(rectangle)
             print(
                 f"Rectangle [{rectangle[0]}, {rectangle[1]}] with area {best_area} fits!"

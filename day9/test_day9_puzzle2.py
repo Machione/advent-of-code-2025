@@ -1,6 +1,11 @@
 import pytest
 
-from .puzzle2 import point_inside_polygon, polygon_lines, solve
+from .puzzle2 import (
+    point_inside_polygon,
+    polygon_lines,
+    solve,
+    split_and_clean_polygon_lines,
+)
 
 test_data = """7,1
 11,1
@@ -52,7 +57,8 @@ simple_square = polygon_lines([(10, 10), (20, 10), (20, 20), (10, 20)])
     ],
 )
 def test_inside(point: tuple[int, int], expected: bool) -> None:
-    actual = point_inside_polygon(simple_square, point)
+    h, v = split_and_clean_polygon_lines(simple_square)
+    actual = point_inside_polygon(h, v, point)
     assert actual == expected
 
 
@@ -263,7 +269,8 @@ m_polygon = polygon_lines(
     ],
 )
 def test_inside_complex(point: tuple[int, int], expected: bool) -> None:
-    actual = point_inside_polygon(m_polygon, point)
+    h, v = split_and_clean_polygon_lines(m_polygon)
+    actual = point_inside_polygon(h, v, point)
     assert actual == expected
 
 
@@ -468,5 +475,6 @@ island_polygon = polygon_lines(
     ],
 )
 def test_inside_island(point: tuple[int, int], expected: bool) -> None:
-    actual = point_inside_polygon(island_polygon, point)
+    h, v = split_and_clean_polygon_lines(island_polygon)
+    actual = point_inside_polygon(h, v, point)
     assert actual == expected
