@@ -1,6 +1,6 @@
 import pytest
 
-from .puzzle2 import Polygon, solve
+from .puzzle2 import point_inside_polygon, polygon_lines, solve
 
 test_data = """7,1
 11,1
@@ -18,7 +18,7 @@ def test_solve() -> None:
     assert actual == expected
 
 
-simple_square = Polygon([(10, 10), (20, 10), (20, 20), (10, 20)])
+simple_square = polygon_lines([(10, 10), (20, 10), (20, 20), (10, 20)])
 
 
 @pytest.mark.parametrize(
@@ -52,11 +52,11 @@ simple_square = Polygon([(10, 10), (20, 10), (20, 20), (10, 20)])
     ],
 )
 def test_inside(point: tuple[int, int], expected: bool) -> None:
-    actual = simple_square.is_inside(point)
+    actual = point_inside_polygon(simple_square, point)
     assert actual == expected
 
 
-m_polygon = Polygon(
+m_polygon = polygon_lines(
     [
         (10, 10),
         (20, 10),
@@ -263,11 +263,11 @@ m_polygon = Polygon(
     ],
 )
 def test_inside_complex(point: tuple[int, int], expected: bool) -> None:
-    actual = m_polygon.is_inside(point)
+    actual = point_inside_polygon(m_polygon, point)
     assert actual == expected
 
 
-island_polygon = Polygon(
+island_polygon = polygon_lines(
     [
         (10, 10),
         (20, 10),
@@ -468,5 +468,5 @@ island_polygon = Polygon(
     ],
 )
 def test_inside_island(point: tuple[int, int], expected: bool) -> None:
-    actual = island_polygon.is_inside(point)
+    actual = point_inside_polygon(island_polygon, point)
     assert actual == expected

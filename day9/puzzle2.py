@@ -1,11 +1,6 @@
-from __future__ import annotations
-
 import itertools
-import multiprocessing
 from collections import Counter
-from collections.abc import Iterator, Sequence
-from concurrent.futures import ProcessPoolExecutor
-from typing import Optional
+from collections.abc import Sequence
 
 from tqdm import tqdm
 
@@ -13,125 +8,76 @@ from tqdm import tqdm
 # y-axis: Top to bottom = less to more
 
 
-class Rectangle:
-    def __init__(self, p1: tuple[int, int], p2: tuple[int, int]) -> None:
-        self.bottom = max(p1[1], p2[1])
-        self.top = min(p1[1], p2[1])
-        self.left = min(p1[0], p2[0])
-        self.right = max(p1[0], p2[0])
-
-    @property
-    def area(self) -> int:
-        width = self.right - self.left + 1
-        height = self.bottom - self.top + 1
-        area = width * height
-        return area
-
-    def iter_corners(self) -> Iterator[tuple[int, int]]:
-        yield (self.left, self.top)
-        yield (self.right, self.top)
-        yield (self.right, self.bottom)
-        yield (self.left, self.bottom)
-
-    def iter_edges(self) -> Iterator[tuple[int, int]]:
-        for x in range(self.left, self.right):
-            yield (x, self.top)
-
-        for y in range(self.top, self.bottom):
-            yield (self.right, y)
-
-        for x in range(self.right, self.left, -1):
-            yield (x, self.bottom)
-
-        for y in range(self.bottom, self.top, -1):
-            yield (self.left, y)
-
-    def iter_points(self) -> Iterator[tuple[int, int]]:
-        for y in range(self.top, self.bottom + 1):
-            for x in range(self.left, self.right + 1):
-                yield (x, y)
+def polygon_lines(
+    points: Sequence[tuple[int, int]],
+) -> tuple[tuple[tuple[int, int], tuple[int, int]], ...]:
+    points = list(points) + [points[0]]
+    lines = tuple((points[i], points[i + 1]) for i in range(len(points) - 1))
+    return lines
 
 
-class Line:
-    def __init__(self, p1: tuple[int, int], p2: tuple[int, int]) -> None:
-        self.p1 = p1
-        self.p2 = p2
+def point_inside_polygon(
+    lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...], point: tuple[int, int]
+) -> bool:
+    crossings_to_right: list[tuple[int, int]] = []
+    for line in lines:
+        horizontal = line[0][1] == line[1][1]
+        vertical = line[0][0] == line[1][0]
 
-        self.bottom = max(p1[1], p2[1])
-        self.top = min(p1[1], p2[1])
-        self.left = min(p1[0], p2[0])
-        self.right = max(p1[0], p2[0])
+        if horizontal:
+            line_start = (min(line[0][0], line[1][0]), line[0][1])
+            line_end = (max(line[0][0], line[1][0]), line[0][1])
 
-        self.horizontal = self.top == self.bottom
-        self.vertical = self.left == self.right
-        if self.horizontal is False and self.vertical is False:
-            raise NotImplementedError("Only horizontal or vertical lines allowed")
+        if vertical:
+            line_start = (line[0][0], min(line[0][1], line[1][1]))
+            line_end = (line[0][0], max(line[0][1], line[1][1]))
 
-    def extended_point_crosses_at(
-        self, point: tuple[int, int]
-    ) -> Optional[tuple[int, int]]:
-        if self.horizontal:
-            # The line is left-to-right, and points on the boundary count as inside
-            return None
-
-        if point[0] >= self.right:
-            # The point is already to the right of the line
-            return None
-
-        if point[1] < self.top or point[1] >= self.bottom:
-            # The point misses the ends of the line
-            return None
-
-        return (self.left, point[1])
-
-    def __iter__(self):
-        if self.horizontal:
-            self.current = (self.left, self.top)
-            self.end = (self.right, self.top)
-            return self
-
-        self.current = (self.left, self.top)
-        self.end = (self.left, self.bottom)
-        return self
-
-    def __next__(self) -> tuple[int, int]:
-        if self.horizontal and self.current[0] > self.end[0]:
-            raise StopIteration
-
-        if self.vertical and self.current[1] > self.end[1]:
-            raise StopIteration
-
-        this = self.current
-
-        if self.horizontal:
-            self.current = (self.current[0] + 1, self.current[1])
-
-        if self.vertical:
-            self.current = (self.current[0], self.current[1] + 1)
-
-        return this
-
-
-class Polygon:
-    def __init__(self, points: Sequence[tuple[int, int]]) -> None:
-        points = list(points) + [points[0]]
-        self.lines = tuple(
-            Line(points[i], points[i + 1]) for i in range(len(points) - 1)
-        )
-        self.boundary = set(point for line in self.lines for point in line)
-
-    def is_inside(self, point: tuple[int, int]) -> bool:
-        if point in self.boundary:
+        if (
+            horizontal
+            and point[1] == line_start[1]
+            and point[0] >= line_start[0]
+            and point[0] <= line_end[0]
+        ):
+            # The point lies on the line
             return True
 
-        crossing_points = tuple(
-            line.extended_point_crosses_at(point) for line in self.lines
-        )
-        actual_crossing_points = tuple(p for p in crossing_points if p is not None)
-        non_overlapping_crossings = tuple(
-            p for p, n in Counter(actual_crossing_points).items() if n == 1
-        )
-        return bool(len(non_overlapping_crossings) % 2)
+        if vertical:
+            if (
+                point[0] == line_start[0]
+                and point[1] >= line_start[1]
+                and point[1] <= line_end[1]
+            ):
+                # The point lies on the line
+                return True
+
+            if (
+                point[0] < line_start[0]
+                and point[1] >= line_start[1]
+                and point[1] < line_end[1]
+            ):
+                crossing_point = (line_start[0], point[1])
+                crossings_to_right.append(crossing_point)
+
+    non_overlapping_crossings = tuple(
+        p for p, n in Counter(crossings_to_right).items() if n == 1
+    )
+    return bool(len(non_overlapping_crossings) % 2)
+
+
+def all_points_inside(
+    lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...],
+) -> tuple[tuple[int, int], ...]:
+    left = min(min(line[0][0], line[1][0]) for line in lines)
+    right = max(max(line[0][0], line[1][0]) for line in lines)
+    top = min(min(line[0][1], line[1][1]) for line in lines)
+    bottom = max(max(line[0][1], line[1][1]) for line in lines)
+    points_inside = tuple(
+        (x, y)
+        for y in range(top, bottom + 1)
+        for x in range(left, right + 1)
+        if point_inside_polygon(lines, (x, y))
+    )
+    return points_inside
 
 
 def data_to_points(data: str) -> list[tuple[int, int]]:
@@ -143,73 +89,67 @@ def data_to_points(data: str) -> list[tuple[int, int]]:
     return points
 
 
+def rectangle_area(rectangle: tuple[tuple[int, int], tuple[int, int]]) -> int:
+    top_left, bottom_right = rectangle
+    top_right = (bottom_right[0], top_left[1])
+    bottom_left = (top_left[0], bottom_right[1])
+    this_width = top_right[0] - top_left[0] + 1
+    this_height = bottom_left[1] - top_left[1] + 1
+    this_area = this_width * this_height
+    return this_area
+
+
 def all_rectangles(
     points: list[tuple[int, int]],
-) -> tuple[Rectangle, ...]:
-    rects = tuple(
-        Rectangle(p1, p2)
+) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+    rects = [
+        (p1, p2)
         for p1, p2 in itertools.permutations(points, 2)
         if p1[0] <= p2[0] and p1[1] <= p2[1] and (p1[0] < p2[0] or p1[1] < p2[1])
-    )
+    ]
+    rects.sort(key=lambda x: rectangle_area(x), reverse=True)
     return rects
 
 
 def rectangle_ok(
-    poly: Polygon,
-    rectangle: Rectangle,
-    current_max: multiprocessing.sharedctypes.Synchronized,
-) -> Optional[Rectangle]:
-    if rectangle.area <= current_max.value:
-        return None
+    points_inside_polygon: tuple[tuple[int, int], ...],
+    rectangle: tuple[tuple[int, int], tuple[int, int]],
+) -> bool:
+    top_left, bottom_right = rectangle
+    bottom_left = (top_left[0], bottom_right[1])
+    if bottom_left not in points_inside_polygon:
+        return False
 
-    for p in rectangle.iter_corners():
-        if poly.is_inside(p) is False:
-            return None
+    top_right = (bottom_right[0], top_left[1])
+    if top_right not in points_inside_polygon:
+        return False
 
-    for p in rectangle.iter_edges():
-        if poly.is_inside(p) is False:
-            return None
+    for y in range(top_left[1], bottom_left[1] + 1):
+        for x in range(top_left[0], top_right[0] + 1):
+            if (x, y) not in points_inside_polygon:
+                return False
 
-    for p in rectangle.iter_points():
-        if poly.is_inside(p) is False:
-            return None
-
-    current_max.value = rectangle.area
-
-    return rectangle
-
-
-def single_pool_rectangle_ok(args) -> Optional[Rectangle]:
-    poly, rectangle, cur = args
-    return rectangle_ok(poly, rectangle, cur)
+    return True
 
 
 def solve(data: str) -> int:
     points = data_to_points(data)
-    poly = Polygon(points)
+    print("Read in the data")
+    poly = polygon_lines(points)
+    print("Converted points to lines on a polygon")
+    points_inside = all_points_inside(poly)
+    print("Found all the points inside the polygon")
     rectangles = all_rectangles(points)
-    with tqdm(total=len(rectangles)) as progress:
-        with multiprocessing.Manager() as manager:
-            current_max_size = manager.Value("b", 0)
-            last_max_size = 0
-            ok_rectangles: list[Rectangle] = []
-            args = [(poly, rectangle, current_max_size) for rectangle in rectangles]
-            with ProcessPoolExecutor() as executor:
-                for res in executor.map(single_pool_rectangle_ok, args):
-                    progress.update()
-                    if res is not None:
-                        ok_rectangles.append(res)
+    print("Found and sorted all the possible rectangles")
+    for rectangle in tqdm(rectangles):
+        if rectangle_ok(points_inside, rectangle):
+            best_area = rectangle_area(rectangle)
+            return best_area
 
-                    if current_max_size.value > last_max_size:
-                        print(current_max_size.value)
-                        last_max_size = current_max_size.value
-
-    ok_rectangles.sort(key=lambda x: x.area, reverse=True)
-    return ok_rectangles[0].area
+    return 0
 
 
 if __name__ == "__main__":
-    multiprocessing.set_start_method("forkserver")
     with open("day9/input.txt") as f:
         points_data = f.read()
 
