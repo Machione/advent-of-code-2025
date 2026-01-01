@@ -1,13 +1,12 @@
 import itertools
 from collections import Counter
-from collections.abc import Sequence
 
 # x-axis: Left to right = less to more
 # y-axis: Top to bottom = less to more
 
 
 def polygon_lines(
-    points: Sequence[tuple[int, int]],
+    points: list[tuple[int, int]],
 ) -> tuple[tuple[tuple[int, int], tuple[int, int]], ...]:
     points = list(points) + [points[0]]
     lines = tuple((points[i], points[i + 1]) for i in range(len(points) - 1))
