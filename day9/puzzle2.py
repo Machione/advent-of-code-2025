@@ -1,8 +1,7 @@
 import itertools
 from collections import Counter
 from collections.abc import Sequence
-
-from tqdm import tqdm
+from functools import cache
 
 # x-axis: Left to right = less to more
 # y-axis: Top to bottom = less to more
@@ -16,6 +15,7 @@ def polygon_lines(
     return lines
 
 
+@cache
 def point_inside_polygon(
     lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...], point: tuple[int, int]
 ) -> bool:
@@ -64,22 +64,6 @@ def point_inside_polygon(
     return bool(len(non_overlapping_crossings) % 2)
 
 
-def all_points_inside(
-    lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...],
-) -> tuple[tuple[int, int], ...]:
-    left = min(min(line[0][0], line[1][0]) for line in lines)
-    right = max(max(line[0][0], line[1][0]) for line in lines)
-    top = min(min(line[0][1], line[1][1]) for line in lines)
-    bottom = max(max(line[0][1], line[1][1]) for line in lines)
-    points_inside = tuple(
-        (x, y)
-        for y in range(top, bottom + 1)
-        for x in range(left, right + 1)
-        if point_inside_polygon(lines, (x, y))
-    )
-    return points_inside
-
-
 def data_to_points(data: str) -> list[tuple[int, int]]:
     points = []
     for line in data.split():
@@ -112,22 +96,24 @@ def all_rectangles(
 
 
 def rectangle_ok(
-    points_inside_polygon: tuple[tuple[int, int], ...],
+    polygon_lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...],
     rectangle: tuple[tuple[int, int], tuple[int, int]],
 ) -> bool:
     top_left, bottom_right = rectangle
     bottom_left = (top_left[0], bottom_right[1])
-    if bottom_left not in points_inside_polygon:
+    if point_inside_polygon(polygon_lines, bottom_left) is False:
         return False
 
     top_right = (bottom_right[0], top_left[1])
-    if top_right not in points_inside_polygon:
+    if point_inside_polygon(polygon_lines, top_right) is False:
         return False
 
-    for y in range(top_left[1], bottom_left[1] + 1):
-        for x in range(top_left[0], top_right[0] + 1):
-            if (x, y) not in points_inside_polygon:
-                return False
+    all_points = itertools.product(
+        range(top_left[0], top_right[0] + 1), range(top_left[1], bottom_left[1] + 1)
+    )
+    for point in all_points:
+        if point_inside_polygon(polygon_lines, point) is False:
+            return False
 
     return True
 
@@ -137,14 +123,20 @@ def solve(data: str) -> int:
     print("Read in the data")
     poly = polygon_lines(points)
     print("Converted points to lines on a polygon")
-    points_inside = all_points_inside(poly)
-    print("Found all the points inside the polygon")
     rectangles = all_rectangles(points)
     print("Found and sorted all the possible rectangles")
-    for rectangle in tqdm(rectangles):
-        if rectangle_ok(points_inside, rectangle):
+    num_rectangles = len(rectangles)
+    for i, rectangle in enumerate(rectangles):
+        if rectangle_ok(poly, rectangle):
             best_area = rectangle_area(rectangle)
+            print(
+                f"Rectangle [{rectangle[0]}, {rectangle[1]}] with area {best_area} fits!"
+            )
             return best_area
+
+        print(
+            f"Rectangle {i} of {num_rectangles}, [{rectangle[0]}, {rectangle[1]}] failed"
+        )
 
     return 0
 
