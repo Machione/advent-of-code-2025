@@ -111,10 +111,31 @@ def rectangle_ok(
     if point_inside_polygon(horizontal_lines, vertical_lines, top_right) is False:
         return False
 
-    all_points = itertools.product(
-        range(top_left[0], top_right[0] + 1), range(top_left[1], bottom_left[1] + 1)
+    for x in range(top_left[0], top_right[0] + 1):
+        top_point = (x, top_left[1])
+        if point_inside_polygon(horizontal_lines, vertical_lines, top_point) is False:
+            return False
+
+        bottom_point = (x, bottom_left[1])
+        if (
+            point_inside_polygon(horizontal_lines, vertical_lines, bottom_point)
+            is False
+        ):
+            return False
+
+    for y in range(top_left[1], bottom_left[1] + 1):
+        left_point = (top_left[0], y)
+        if point_inside_polygon(horizontal_lines, vertical_lines, left_point) is False:
+            return False
+
+        right_point = (top_right[0], y)
+        if point_inside_polygon(horizontal_lines, vertical_lines, right_point) is False:
+            return False
+
+    all_inside_points = itertools.product(
+        range(top_left[0] + 1, top_right[0]), range(top_left[1] + 1, bottom_left[1])
     )
-    for point in all_points:
+    for point in all_inside_points:
         if point_inside_polygon(horizontal_lines, vertical_lines, point) is False:
             return False
 
