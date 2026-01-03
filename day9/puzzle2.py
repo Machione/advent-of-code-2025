@@ -1,7 +1,6 @@
-import collections
 import itertools
+import multiprocessing
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
 
 # x-axis: Left to right = less to more
 # y-axis: Top to bottom = less to more
@@ -110,38 +109,6 @@ def all_rectangles(
     return rects
 
 
-# Source - https://stackoverflow.com/a
-# Posted by ShadowRanger, modified by community. See post 'Timeline' for change history
-# Retrieved 2026-01-02, License - CC BY-SA 4.0
-def executor_map(executor, fn, *iterables):
-    argsiter = zip(*iterables)
-    initialargs = itertools.islice(argsiter, executor._max_workers)
-
-    fs = collections.deque(executor.submit(fn, *args) for args in initialargs)
-
-    def result_iterator():
-        nonlocal argsiter
-        try:
-            while fs:
-                res = fs.popleft().result()
-                # Dispatch next task before yielding to keep
-                # pipeline full
-                if argsiter:
-                    try:
-                        args = next(argsiter)
-                    except StopIteration:
-                        argsiter = None
-                    else:
-                        fs.append(executor.submit(fn, *args))
-
-                yield res
-        finally:
-            for future in fs:
-                future.cancel()
-
-    return result_iterator()
-
-
 def rectangle_ok(
     horizontal_lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...],
     vertical_lines: tuple[tuple[tuple[int, int], tuple[int, int]], ...],
@@ -183,15 +150,22 @@ def rectangle_ok(
     all_args = (
         (horizontal_lines, vertical_lines, point) for point in all_inside_points
     )
-    with ThreadPoolExecutor() as executor:
-        # 44k it/s with ThreadPoolExecutor, using 111%
-        # 9k it/s with ProcessPoolExecutor, using 100% and forkserver
-        # 4k it/s with InterpreterPoolExecutor, using 123%
-        for res in executor_map(executor, pool_safe_point_inside_polygon, all_args):
-            if res is False:
-                return False
+    with multiprocessing.Pool() as pool:
+        try:
+            for result in pool.imap_unordered(
+                pool_safe_point_inside_polygon, all_args, 1000
+            ):
+                if result is False:
+                    pool.terminate()
+                    return False
 
-    return True
+            pool.close()
+            pool.join()
+            return True
+        except Exception:
+            pool.terminate()
+            pool.join()
+            raise
 
 
 def solve(data: str) -> int:
@@ -220,6 +194,7 @@ def solve(data: str) -> int:
 
 
 if __name__ == "__main__":
+    multiprocessing.set_start_method("forkserver")
     with open("day9/input.txt") as f:
         points_data = f.read()
 
