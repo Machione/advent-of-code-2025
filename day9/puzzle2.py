@@ -1,5 +1,7 @@
+import collections
 import itertools
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 
 # x-axis: Left to right = less to more
 # y-axis: Top to bottom = less to more
@@ -66,6 +68,17 @@ def point_inside_polygon(
     return bool(len(non_overlapping_crossings) % 2)
 
 
+def pool_safe_point_inside_polygon(
+    args: tuple[
+        tuple[tuple[tuple[int, int], tuple[int, int]], ...],
+        tuple[tuple[tuple[int, int], tuple[int, int]], ...],
+        tuple[int, int],
+    ],
+) -> bool:
+    h_lines, v_lines, point = args
+    return point_inside_polygon(h_lines, v_lines, point)
+
+
 def data_to_points(data: str) -> list[tuple[int, int]]:
     points = []
     for line in data.split():
@@ -95,6 +108,38 @@ def all_rectangles(
     ]
     rects.sort(key=lambda x: rectangle_area(x), reverse=True)
     return rects
+
+
+# Source - https://stackoverflow.com/a
+# Posted by ShadowRanger, modified by community. See post 'Timeline' for change history
+# Retrieved 2026-01-02, License - CC BY-SA 4.0
+def executor_map(executor, fn, *iterables):
+    argsiter = zip(*iterables)
+    initialargs = itertools.islice(argsiter, executor._max_workers)
+
+    fs = collections.deque(executor.submit(fn, *args) for args in initialargs)
+
+    def result_iterator():
+        nonlocal argsiter
+        try:
+            while fs:
+                res = fs.popleft().result()
+                # Dispatch next task before yielding to keep
+                # pipeline full
+                if argsiter:
+                    try:
+                        args = next(argsiter)
+                    except StopIteration:
+                        argsiter = None
+                    else:
+                        fs.append(executor.submit(fn, *args))
+
+                yield res
+        finally:
+            for future in fs:
+                future.cancel()
+
+    return result_iterator()
 
 
 def rectangle_ok(
@@ -135,9 +180,16 @@ def rectangle_ok(
     all_inside_points = itertools.product(
         range(top_left[0] + 1, top_right[0]), range(top_left[1] + 1, bottom_left[1])
     )
-    for point in all_inside_points:
-        if point_inside_polygon(horizontal_lines, vertical_lines, point) is False:
-            return False
+    all_args = (
+        (horizontal_lines, vertical_lines, point) for point in all_inside_points
+    )
+    with ThreadPoolExecutor() as executor:
+        # 44k it/s with ThreadPoolExecutor, using 111%
+        # 9k it/s with ProcessPoolExecutor, using 100% and forkserver
+        # 4k it/s with InterpreterPoolExecutor, using 123%
+        for res in executor_map(executor, pool_safe_point_inside_polygon, all_args):
+            if res is False:
+                return False
 
     return True
 
